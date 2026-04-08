@@ -3,12 +3,14 @@ Aplicație desktop pentru traducerea documentelor Word din română în engleză
 folosind Azure Translator. Păstrează formatarea (stiluri, fonturi, tabele, headers/footers).
 """
 import os
+import sys
 import uuid
 import copy
 import time
 import logging
 import traceback
 import threading
+import subprocess
 from datetime import datetime
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
@@ -22,10 +24,22 @@ from dotenv import load_dotenv
 os.environ.setdefault("SSL_CERT_FILE", certifi.where())
 os.environ.setdefault("REQUESTS_CA_BUNDLE", certifi.where())
 
-load_dotenv()
+def app_dir() -> str:
+    """Directorul aplicației, indiferent dacă rulează ca .py sau ca .exe (PyInstaller)."""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+APP_DIR = app_dir()
+OUTPUT_DIR = os.path.join(APP_DIR, "rapoarte_traduse")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# Caută .env atât lângă script cât și lângă .exe
+load_dotenv(os.path.join(APP_DIR, ".env"))
 
 # Logging atât în consolă cât și în fișier (translator.log lângă script).
-LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "translator.log")
+LOG_PATH = os.path.join(APP_DIR, "translator.log")
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -129,6 +143,19 @@ def iter_paragraphs(doc):
                 yield from _iter_table(table)
 
 
+def open_file(path: str) -> None:
+    """Deschide fișierul cu aplicația implicită a sistemului."""
+    try:
+        if sys.platform.startswith("win"):
+            os.startfile(path)  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", path])
+        else:
+            subprocess.Popen(["xdg-open", path])
+    except Exception as e:
+        logging.warning("Nu am putut deschide fișierul %s: %s", path, e)
+
+
 def _iter_table(table):
     for row in table.rows:
         for cell in row.cells:
@@ -204,17 +231,22 @@ class App(tk.Tk):
 
     def start(self):
         path = self.path_var.get().strip()
-        key = self.key_var.get().strip()
-        region = self.region_var.get().strip()
+        key = AZURE_KEY
+        region = AZURE_REGION
         if not path or not os.path.isfile(path):
             messagebox.showerror("Eroare", "Selectează un fișier .docx valid.")
             return
         if not key or not region:
-            messagebox.showerror("Eroare", "Completează cheia și regiunea Azure.")
+            messagebox.showerror(
+                "Configurare lipsă",
+                "Lipsește AZURE_TRANSLATOR_KEY / AZURE_TRANSLATOR_REGION.\n"
+                f"Creează un fișier .env lângă aplicație ({APP_DIR}).",
+            )
             return
 
-        base, ext = os.path.splitext(path)
-        out_path = f"{base}.en{ext}"
+        name = os.path.basename(path)
+        base, ext = os.path.splitext(name)
+        out_path = os.path.join(OUTPUT_DIR, f"{base}_EN{ext}")
         translator = AzureTranslator(key, region, AZURE_ENDPOINT)
 
         def worker():
@@ -227,7 +259,7 @@ class App(tk.Tk):
                 translate_document(path, out_path, translator, self.set_progress)
                 log.info("Salvat: %s", out_path)
                 self.set_status(f"Gata: {out_path}")
-                messagebox.showinfo("Succes", f"Document salvat:\n{out_path}")
+                open_file(out_path)
             except requests.HTTPError as e:
                 body = e.response.text if e.response is not None else ""
                 log.error("HTTPError: %s\nResponse body: %s", e, body)

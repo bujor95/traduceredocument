@@ -34,6 +34,23 @@ python translator_app.py
 - Apasă **Traduce**. Documentul tradus este salvat lângă cel original cu
   sufixul `.en.docx`.
 
+## Unde se salvează rapoartele
+
+Toate documentele traduse ajung în folderul `rapoarte_traduse/` creat automat
+lângă aplicație (sau lângă `.exe` dacă rulezi varianta compilată). După
+traducere, fișierul se deschide automat în Word.
+
+## Build executabil Windows (.exe)
+
+```bash
+pip install pyinstaller
+pyinstaller --onefile --windowed --name TraduceRaport translator_app.py
+```
+
+`.exe`-ul rezultat e în `dist/TraduceRaport.exe`. Pentru a-l folosi, copiază
+lângă el fișierul `.env` cu cheia Azure — la prima rulare se va crea automat
+folderul `rapoarte_traduse/` în același loc.
+
 ## Cum păstrează formatarea
 
 Traducerea se face la nivel de **run** din `python-docx` — fiecare segment de
