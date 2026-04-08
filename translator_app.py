@@ -15,14 +15,19 @@ from datetime import datetime
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+# IMPORTANT: truststore trebuie injectat ÎNAINTE de a importa requests/urllib3,
+# ca să folosească magazinul de certificate al Windows-ului (unde rețelele
+# corporate își instalează CA-ul de proxy via GPO). Rezolvă SSL: CERTIFICATE_VERIFY_FAILED.
+try:
+    import truststore
+    truststore.inject_into_ssl()
+except Exception:
+    pass
+
 import certifi
 import requests
 from docx import Document
 from dotenv import load_dotenv
-
-# Asigură că requests folosește bundle-ul certifi (rezolvă SSL: CERTIFICATE_VERIFY_FAILED)
-os.environ.setdefault("SSL_CERT_FILE", certifi.where())
-os.environ.setdefault("REQUESTS_CA_BUNDLE", certifi.where())
 
 def app_dir() -> str:
     """Directorul aplicației, indiferent dacă rulează ca .py sau ca .exe (PyInstaller)."""
@@ -102,8 +107,10 @@ class AzureTranslator:
         last_exc = None
         for attempt in range(1, max_retries + 1):
             try:
+                # Nu forțăm verify=certifi.where() — lăsăm truststore să folosească
+                # magazinul de certificate al sistemului (necesar în rețele corporate).
                 r = requests.post(self.url, params=params, headers=headers, json=body,
-                                  timeout=60, verify=certifi.where())
+                                  timeout=60)
                 if r.status_code in (429, 500, 502, 503, 504):
                     wait = int(r.headers.get("Retry-After", 0)) or min(2 ** attempt, 30)
                     logging.warning("Azure %s la încercarea %d/%d. Aștept %ds. Body: %s",
