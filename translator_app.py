@@ -5,6 +5,7 @@ folosind Azure Translator. Păstrează formatarea (stiluri, fonturi, tabele, hea
 import os
 import uuid
 import copy
+import time
 import logging
 import traceback
 import threading
@@ -75,7 +76,7 @@ class AzureTranslator:
         flush()
         return results
 
-    def _call(self, texts, from_lang, to_lang):
+    def _call(self, texts, from_lang, to_lang, max_retries=5):
         params = {"api-version": "3.0", "from": from_lang, "to": [to_lang]}
         headers = {
             "Ocp-Apim-Subscription-Key": self.key,
@@ -84,11 +85,30 @@ class AzureTranslator:
             "X-ClientTraceId": str(uuid.uuid4()),
         }
         body = [{"text": t} for t in texts]
-        r = requests.post(self.url, params=params, headers=headers, json=body,
-                          timeout=60, verify=certifi.where())
-        r.raise_for_status()
-        data = r.json()
-        return [item["translations"][0]["text"] for item in data]
+        last_exc = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                r = requests.post(self.url, params=params, headers=headers, json=body,
+                                  timeout=60, verify=certifi.where())
+                if r.status_code in (429, 500, 502, 503, 504):
+                    wait = int(r.headers.get("Retry-After", 0)) or min(2 ** attempt, 30)
+                    logging.warning("Azure %s la încercarea %d/%d. Aștept %ds. Body: %s",
+                                    r.status_code, attempt, max_retries, wait, r.text[:500])
+                    time.sleep(wait)
+                    continue
+                r.raise_for_status()
+                data = r.json()
+                return [item["translations"][0]["text"] for item in data]
+            except requests.HTTPError as e:
+                logging.error("HTTPError %s body=%s",
+                              e, getattr(e.response, "text", "")[:1000])
+                last_exc = e
+                break
+            except requests.RequestException as e:
+                logging.warning("Network error la încercarea %d/%d: %s", attempt, max_retries, e)
+                last_exc = e
+                time.sleep(min(2 ** attempt, 30))
+        raise last_exc if last_exc else RuntimeError("Azure: eșec după retry-uri.")
 
 
 def iter_paragraphs(doc):
