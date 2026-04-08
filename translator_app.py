@@ -9,9 +9,14 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+import certifi
 import requests
 from docx import Document
 from dotenv import load_dotenv
+
+# Asigură că requests folosește bundle-ul certifi (rezolvă SSL: CERTIFICATE_VERIFY_FAILED)
+os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+os.environ.setdefault("REQUESTS_CA_BUNDLE", certifi.where())
 
 load_dotenv()
 
@@ -67,7 +72,8 @@ class AzureTranslator:
             "X-ClientTraceId": str(uuid.uuid4()),
         }
         body = [{"text": t} for t in texts]
-        r = requests.post(self.url, params=params, headers=headers, json=body, timeout=60)
+        r = requests.post(self.url, params=params, headers=headers, json=body,
+                          timeout=60, verify=certifi.where())
         r.raise_for_status()
         data = r.json()
         return [item["translations"][0]["text"] for item in data]
