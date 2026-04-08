@@ -5,7 +5,10 @@ folosind Azure Translator. Păstrează formatarea (stiluri, fonturi, tabele, hea
 import os
 import uuid
 import copy
+import logging
+import traceback
 import threading
+from datetime import datetime
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
@@ -19,6 +22,15 @@ os.environ.setdefault("SSL_CERT_FILE", certifi.where())
 os.environ.setdefault("REQUESTS_CA_BUNDLE", certifi.where())
 
 load_dotenv()
+
+# Logging atât în consolă cât și în fișier (translator.log lângă script).
+LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "translator.log")
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.FileHandler(LOG_PATH, encoding="utf-8"), logging.StreamHandler()],
+)
+log = logging.getLogger("translator")
 
 AZURE_KEY = os.getenv("AZURE_TRANSLATOR_KEY", "")
 AZURE_REGION = os.getenv("AZURE_TRANSLATOR_REGION", "")
@@ -187,15 +199,31 @@ class App(tk.Tk):
 
         def worker():
             try:
+                log.info("=" * 60)
+                log.info("Start traducere: %s", path)
+                log.info("Region=%s endpoint=%s", region, AZURE_ENDPOINT)
+                log.info("certifi bundle: %s", certifi.where())
                 self.set_status("Se traduce…")
                 translate_document(path, out_path, translator, self.set_progress)
+                log.info("Salvat: %s", out_path)
                 self.set_status(f"Gata: {out_path}")
                 messagebox.showinfo("Succes", f"Document salvat:\n{out_path}")
             except requests.HTTPError as e:
-                messagebox.showerror("Eroare Azure", f"{e}\n{e.response.text if e.response else ''}")
+                body = e.response.text if e.response is not None else ""
+                log.error("HTTPError: %s\nResponse body: %s", e, body)
+                log.error(traceback.format_exc())
+                messagebox.showerror(
+                    "Eroare Azure",
+                    f"{e}\n\n{body}\n\nDetalii complete în:\n{LOG_PATH}",
+                )
                 self.set_status("Eroare.")
             except Exception as e:
-                messagebox.showerror("Eroare", str(e))
+                tb = traceback.format_exc()
+                log.error("Exception: %s\n%s", e, tb)
+                messagebox.showerror(
+                    "Eroare",
+                    f"{type(e).__name__}: {e}\n\nDetalii complete în:\n{LOG_PATH}",
+                )
                 self.set_status("Eroare.")
 
         threading.Thread(target=worker, daemon=True).start()
