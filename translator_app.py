@@ -193,8 +193,8 @@ def translate_document(input_path: str, output_path: str, translator: AzureTrans
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Traducere document Word — RO → EN (Azure)")
-        self.geometry("560x320")
+        self.title("Traducere document Word — RO → EN")
+        self.geometry("560x220")
         self.resizable(False, False)
 
         pad = {"padx": 12, "pady": 6}
@@ -205,14 +205,8 @@ class App(tk.Tk):
         ttk.Entry(row, textvariable=self.path_var).pack(side="left", fill="x", expand=True)
         ttk.Button(row, text="Răsfoiește…", command=self.browse).pack(side="left", padx=(6, 0))
 
-        creds = ttk.LabelFrame(self, text="Credențiale Azure Translator")
-        creds.pack(fill="x", **pad)
-        self.key_var = tk.StringVar(value=AZURE_KEY)
-        self.region_var = tk.StringVar(value=AZURE_REGION)
-        ttk.Label(creds, text="Key:").grid(row=0, column=0, sticky="w", padx=6, pady=4)
-        ttk.Entry(creds, textvariable=self.key_var, show="•", width=50).grid(row=0, column=1, padx=6, pady=4)
-        ttk.Label(creds, text="Region:").grid(row=1, column=0, sticky="w", padx=6, pady=4)
-        ttk.Entry(creds, textvariable=self.region_var, width=50).grid(row=1, column=1, padx=6, pady=4)
+        ttk.Label(self, text=f"Rapoartele traduse se salvează în: rapoarte_traduse\\",
+                  foreground="#555").pack(anchor="w", **pad)
 
         self.progress = ttk.Progressbar(self, mode="determinate")
         self.progress.pack(fill="x", **pad)
